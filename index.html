@@ -111,6 +111,13 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        
+        .api-url-container {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
     </style>
 </head>
 
@@ -124,6 +131,19 @@
 
     <div class="container">
         <div class="form-container">
+            <!-- Added API URL configuration -->
+            <div class="api-url-container">
+                <div class="mb-3">
+                    <label for="api-url" class="form-label">API URL:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="api-url" value="http://localhost:7860/proxy-generate">
+                        <button class="btn btn-outline-secondary" type="button" id="test-connection">Test Connection</button>
+                    </div>
+                    <div class="form-text">If running locally, use localhost. If using HuggingFace, use their API URL.</div>
+                </div>
+                <div id="connection-status"></div>
+            </div>
+
             <form id="generation-form">
                 <div class="mb-4">
                     <label for="prompt" class="form-label">Enter your prompt:</label>
@@ -183,8 +203,34 @@
     </footer>
 
     <script>
-        // API URL for the backend
-        const API_URL = 'http://localhost:7860/proxy-generate'; // Will be updated with actual URL
+        // Updated to use configurable API URL
+        let API_URL = 'http://localhost:7860/proxy-generate';
+        
+        // Test connection button
+        document.getElementById('test-connection').addEventListener('click', function() {
+            const url = document.getElementById('api-url').value;
+            const connectionStatus = document.getElementById('connection-status');
+            
+            connectionStatus.innerHTML = '<div class="alert alert-info">Testing connection...</div>';
+            
+            // Test the root endpoint of the API
+            fetch(url.replace('/proxy-generate', '/'))
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error('Server returned an error');
+                    }
+                })
+                .then(data => {
+                    connectionStatus.innerHTML = `<div class="alert alert-success">Connection successful! Server running on ${data.device}</div>`;
+                    API_URL = document.getElementById('api-url').value;
+                })
+                .catch(error => {
+                    connectionStatus.innerHTML = '<div class="alert alert-danger">Connection failed. Please check the URL and make sure the server is running.</div>';
+                    console.error('Connection error:', error);
+                });
+        });
 
         // Update slider values
         document.getElementById('num-images').addEventListener('input', function () {
@@ -208,6 +254,9 @@
             const numImages = document.getElementById('num-images').value;
             const steps = document.getElementById('steps').value;
             const guidance = document.getElementById('guidance').value;
+            
+            // Use the current API URL
+            API_URL = document.getElementById('api-url').value;
 
             // Show loading spinner
             document.getElementById('loading').style.display = 'block';
@@ -226,58 +275,64 @@
                     guidance: parseFloat(guidance)
                 })
             })
-                .then(response => response.json())
-                .then(data => {
-                    // Hide loading spinner
-                    document.getElementById('loading').style.display = 'none';
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Server returned an error: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
 
-                    if (data.error) {
-                        // Show error message
-                        const statusEl = document.getElementById('status');
-                        statusEl.className = 'status-error';
-                        statusEl.textContent = data.error;
-                        statusEl.style.display = 'block';
-                    } else {
-                        // Display images
-                        const gallery = document.getElementById('image-gallery');
-                        gallery.innerHTML = '';
-
-                        data.images.forEach((image, index) => {
-                            const card = document.createElement('div');
-                            card.className = 'image-card';
-
-                            card.innerHTML = `
-                    <div class="image-container">
-                        <img src="data:image/png;base64,${image.data}" class="generated-image" alt="Generated image ${index + 1}">
-                    </div>
-                    <div class="image-actions">
-                        <span>Image ${index + 1}</span>
-                        <a href="data:image/png;base64,${image.data}" class="btn btn-sm btn-outline-primary" download="generated_image_${index + 1}.png">Download</a>
-                    </div>
-                `;
-
-                            gallery.appendChild(card);
-                        });
-
-                        // Show success message
-                        const statusEl = document.getElementById('status');
-                        statusEl.className = 'status-success';
-                        statusEl.textContent = 'Images generated successfully!';
-                        statusEl.style.display = 'block';
-                    }
-                })
-                .catch(error => {
-                    // Hide loading spinner
-                    document.getElementById('loading').style.display = 'none';
-
+                if (data.error) {
                     // Show error message
                     const statusEl = document.getElementById('status');
                     statusEl.className = 'status-error';
-                    statusEl.textContent = 'An error occurred while generating images. Please try again.';
+                    statusEl.textContent = data.error;
                     statusEl.style.display = 'block';
-                    console.error('Error:', error);
-                });
-        }); </script>
+                } else {
+                    // Display images
+                    const gallery = document.getElementById('image-gallery');
+                    gallery.innerHTML = '';
+
+                    data.images.forEach((image, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'image-card';
+
+                        card.innerHTML = `
+                            <div class="image-container">
+                                <img src="data:image/png;base64,${image.data}" class="generated-image" alt="Generated image ${index + 1}">
+                            </div>
+                            <div class="image-actions">
+                                <span>Image ${index + 1}</span>
+                                <a href="data:image/png;base64,${image.data}" class="btn btn-sm btn-outline-primary" download="generated_image_${index + 1}.png">Download</a>
+                            </div>
+                        `;
+
+                        gallery.appendChild(card);
+                    });
+
+                    // Show success message
+                    const statusEl = document.getElementById('status');
+                    statusEl.className = 'status-success';
+                    statusEl.textContent = 'Images generated successfully!';
+                    statusEl.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                // Hide loading spinner
+                document.getElementById('loading').style.display = 'none';
+
+                // Show error message
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status-error';
+                statusEl.textContent = 'An error occurred: ' + error.message;
+                statusEl.style.display = 'block';
+                console.error('Error:', error);
+            });
+        });
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
