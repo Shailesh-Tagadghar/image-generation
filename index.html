@@ -205,6 +205,7 @@
                     steps: parseInt(steps),
                     guidance: parseFloat(guidance)
                 }),
+                mode: 'no-cors'
             })
             .then(response => response.json())
             .then(data => {
